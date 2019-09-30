@@ -4,20 +4,52 @@ services:
     image: postgres:9.6
     ports:
       - "56430:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=p0stgreS
     networks:
-      - pg-practice
+      pg-practice:
+        ipv4_address: 172.16.0.2
+    volumes:
+      - ./volumes/master/data:/var/lib/postgresql/data
+      - ./volumes/shared:/var/lib/postgresql/shared
+      - ./volumes/slave1:/var/lib/postgresql/slave1
+      - ./volumes/slave2:/var/lib/postgresql/slave2
   slave1:
     image: postgres:9.6
     ports:
       - "56431:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=p0stgreS
     networks:
-      - pg-practice
+      pg-practice:
+        ipv4_address: 172.16.0.3
+    volumes:
+      - ./volumes/slave1/data:/var/lib/postgresql/data
+      - ./volumes/shared:/var/lib/postgresql/shared
+      - ./volumes/slave2:/var/lib/postgresql/slave2
+      - ./volumes/master:/var/lib/postgresql/master
   slave2:
     image: postgres:9.6
     ports:
       - "56432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=p0stgreS
     networks:
-      - pg-practice
+      pg-practice:
+        ipv4_address: 172.16.0.4
+    volumes:
+      - ./volumes/slave2/data:/var/lib/postgresql/data
+      - ./volumes/shared:/var/lib/postgresql/shared
+      - ./volumes/master:/var/lib/postgresql/master
+      - ./volumes/slave1:/var/lib/postgresql/slave1
 networks:
   pg-practice:
-
+    name: pg-practice-bridge
+    driver: bridge
+    ipam:
+     driver: default
+     config:
+       - subnet: 172.16.0.0/24
