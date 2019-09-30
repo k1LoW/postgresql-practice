@@ -1,0 +1,23 @@
+version: "3.7"
+services:
+  master:
+    image: postgres:9.6
+    ports:
+      - "56430:5432"
+    networks:
+      - pg-practice
+  slave1:
+    image: postgres:9.6
+    ports:
+      - "56431:5432"
+    networks:
+      - pg-practice
+  slave2:
+    image: postgres:9.6
+    ports:
+      - "56432:5432"
+    networks:
+      - pg-practice
+networks:
+  pg-practice:
+
