@@ -10,7 +10,7 @@ export SLAVE2_PORT=56432
 
 #############################################################################################
 
-step01__initialize: destroy start_master
+step01__initialize: initialize
 
 step02__setup_master: create_repl_user set_master_replication_params
 
