@@ -57,9 +57,6 @@ set_master_replication_params:
 	echo "wal_keep_segments = 8" >> ./volumes/master/data/postgresql.conf
 	docker-compose restart master
 
-insert_records_to_master:
-	docker-compose exec master pgbench -U postgres -h 127.0.0.1 -p 5432 -i
-
 basebackup_master:
 	docker-compose exec master bash -c 'echo "127.0.0.1:5432:replication:${POSTGRES_REPL_USER}:${POSTGRES_REPL_PASSWORD}" > ~/.pgpass'
 	docker-compose exec master bash -c 'chmod 600 ~/.pgpass'
@@ -80,10 +77,6 @@ start_slave2_replication:
 	echo "standby_mode = 'on'" >> ./volumes/slave2/data/recovery.conf
 	echo "primary_conninfo = 'host=172.16.0.2 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD}'" >> ./volumes/slave2/data/recovery.conf
 	docker-compose up -d slave2
-
-check_replication_master:
-	docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
-	docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
 
 crash_master: stop_master
 
@@ -106,6 +99,10 @@ start_slave2_for_slave1_replication: stop_slave2
 	echo "restore_command = 'cp /var/lib/postgresql/slave1/data/pg_xlog/%f \"%p\" 2> /dev/null'" >> ./volumes/slave2/data/recovery.conf
 	docker-compose up -d slave2
 
+check_replication_master:
+	docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
+	docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+
 check_replication_slave1:
 	docker-compose exec slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
 	docker-compose exec slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
@@ -113,6 +110,9 @@ check_replication_slave1:
 check_replication_slave2:
 	docker-compose exec slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
 	docker-compose exec slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+
+insert_records_to_master:
+	docker-compose exec master pgbench -U postgres -h 127.0.0.1 -p 5432 -i
 
 insert_records_to_slave1:
 	docker-compose exec slave1 pgbench -U postgres -h 127.0.0.1 -p 5432 -i
