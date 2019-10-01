@@ -102,14 +102,17 @@ start_slave2_for_slave1_replication: stop_slave2
 check_replication_master:
 	docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
 	docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
 
 check_replication_slave1:
 	docker-compose exec slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
 	docker-compose exec slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
 
 check_replication_slave2:
 	docker-compose exec slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
 	docker-compose exec slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
 
 insert_records_to_master:
 	docker-compose exec master pgbench -U postgres -h 127.0.0.1 -p 5432 -i
