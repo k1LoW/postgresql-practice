@@ -8,6 +8,9 @@ export MASTER_PORT=56430
 export SLAVE1_PORT=56431
 export SLAVE2_PORT=56432
 
+ci:
+	$(MAKE) async_replication
+
 #############################################################################################
 
 async_replication:
@@ -92,7 +95,9 @@ initialize:
 
 create_repl_user:
 	$(MAKE) wait_master
-	docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "CREATE ROLE ${POSTGRES_REPL_USER} LOGIN REPLICATION PASSWORD '${POSTGRES_REPL_PASSWORD}';"
+	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "CREATE ROLE ${POSTGRES_REPL_USER} LOGIN REPLICATION PASSWORD '${POSTGRES_REPL_PASSWORD}';"
+	ls -la .
+	ls -la ./volumes/master/data/pg_hba.conf
 	echo "host replication repl_user 127.0.0.1/32 md5" >> ./volumes/master/data/pg_hba.conf
 	echo "host replication repl_user 172.16.0.0/24 md5" >> ./volumes/master/data/pg_hba.conf
 	docker-compose restart master
@@ -107,9 +112,9 @@ set_master_replication_params:
 
 basebackup_master:
 	$(MAKE) wait_master
-	docker-compose exec master bash -c 'echo "127.0.0.1:5432:replication:${POSTGRES_REPL_USER}:${POSTGRES_REPL_PASSWORD}" > ~/.pgpass'
-	docker-compose exec master bash -c 'chmod 600 ~/.pgpass'
-	docker-compose exec master pg_basebackup -h 127.0.0.1 -p 5432 -U ${POSTGRES_REPL_USER} -D /var/lib/postgresql/shared/data --xlog --checkpoint=fast --progress -w
+	docker-compose exec -T master bash -c 'echo "127.0.0.1:5432:replication:${POSTGRES_REPL_USER}:${POSTGRES_REPL_PASSWORD}" > ~/.pgpass'
+	docker-compose exec -T master bash -c 'chmod 600 ~/.pgpass'
+	docker-compose exec -T master pg_basebackup -h 127.0.0.1 -p 5432 -U ${POSTGRES_REPL_USER} -D /var/lib/postgresql/shared/data --xlog --checkpoint=fast --progress -w
 
 start_slave1_async_replication:
 	mkdir -p ./volumes/slave1
@@ -131,7 +136,7 @@ crash_master:
 	$(MAKE) stop_master
 
 promote_slave1_to_master:
-	docker-compose exec slave1 su postgres -c '/usr/lib/postgresql/9.6/bin/pg_ctl promote -D /var/lib/postgresql/data'
+	docker-compose exec -T slave1 su postgres -c '/usr/lib/postgresql/9.6/bin/pg_ctl promote -D /var/lib/postgresql/data'
 
 start_master_for_slave1_async_replication: stop_master
 	echo "hot_standby = on" >> ./volumes/master/data/postgresql.conf
@@ -151,43 +156,43 @@ start_slave2_for_slave1_async_replication:
 	docker-compose up -d slave2
 
 check_replication_master:
-	docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
-	docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
-	docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
+	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
+	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
 
 check_replication_slave1:
-	docker-compose exec slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
-	docker-compose exec slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
-	docker-compose exec slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
+	docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
+	docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
 
 check_replication_slave2:
-	docker-compose exec slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
-	docker-compose exec slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
-	docker-compose exec slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
+	docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
+	docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
 
 insert_records_to_master:
 	$(MAKE) wait_master
-	docker-compose exec master pgbench -U postgres -h 127.0.0.1 -p 5432 -i
+	docker-compose exec -T master pgbench -U postgres -h 127.0.0.1 -p 5432 -i
 
 insert_records_to_slave1:
 	$(MAKE) wait_slave1
-	-docker-compose exec slave1 pgbench -U postgres -h 127.0.0.1 -p 5432 -i
+	-docker-compose exec -T slave1 pgbench -U postgres -h 127.0.0.1 -p 5432 -i
 
 insert_records_to_slave2:
 	$(MAKE) wait_slave2
-	docker-compose exec slave2 pgbench -U postgres -h 127.0.0.1 -p 5432 -i
+	docker-compose exec -T slave2 pgbench -U postgres -h 127.0.0.1 -p 5432 -i
 
 start_all:
 	docker-compose up -d
 
 wait_master:
-	while ! docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" > /dev/null 2>&1; do sleep 1; echo "waiting"; done;
+	while ! docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" > /dev/null 2>&1; do sleep 1; echo "waiting"; done;
 
 wait_slave1:
-	while ! docker-compose exec slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" > /dev/null 2>&1; do sleep 1; echo 'waiting'; done;
+	while ! docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" > /dev/null 2>&1; do sleep 1; echo 'waiting'; done;
 
 wait_slave2:
-	while ! docker-compose exec slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" > /dev/null 2>&1; do sleep 1; echo 'waiting'; done;
+	while ! docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" > /dev/null 2>&1; do sleep 1; echo 'waiting'; done;
 
 start_master:
 	docker-compose up -d master
@@ -219,10 +224,10 @@ destroy:
 	rm -rf ./volumes
 
 psql_master:
-	docker-compose exec master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}
+	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}
 
 psql_slave1:
-	docker-compose exec slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}
+	docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}
 
 psql_slave2:
-	docker-compose exec slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}
+	docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}
