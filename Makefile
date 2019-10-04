@@ -8,7 +8,7 @@ export MASTER_PORT=56430
 export SLAVE1_PORT=56431
 export SLAVE2_PORT=56432
 
-ci:
+test_async_replication:
 	$(MAKE) async_replication
 
 #############################################################################################
