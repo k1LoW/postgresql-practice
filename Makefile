@@ -1,3 +1,10 @@
+OSNAME=${shell uname -s}
+ifeq ($(OSNAME),Darwin)
+	DO =
+else
+	DO = sudo
+endif
+
 export POSTGRES_USER=postgres
 export POSTGRES_PASSWORD=p0stgreS
 
@@ -96,18 +103,16 @@ initialize:
 create_repl_user:
 	$(MAKE) wait_master
 	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "CREATE ROLE ${POSTGRES_REPL_USER} LOGIN REPLICATION PASSWORD '${POSTGRES_REPL_PASSWORD}';"
-	ls -la .
-	ls -la ./volumes/master/data/pg_hba.conf
-	echo "host replication repl_user 127.0.0.1/32 md5" >> ./volumes/master/data/pg_hba.conf
-	echo "host replication repl_user 172.16.0.0/24 md5" >> ./volumes/master/data/pg_hba.conf
+	$(DO) echo "host replication repl_user 127.0.0.1/32 md5" >> ./volumes/master/data/pg_hba.conf
+	$(DO) echo "host replication repl_user 172.16.0.0/24 md5" >> ./volumes/master/data/pg_hba.conf
 	docker-compose restart master
 
 set_master_replication_params:
-	echo "wal_level = replica" >> ./volumes/master/data/postgresql.conf
-	echo "synchronous_commit = on" >> ./volumes/master/data/postgresql.conf
-	echo "max_wal_senders = 3" >> ./volumes/master/data/postgresql.conf
-	echo "archive_mode = off" >> ./volumes/master/data/postgresql.conf
-	echo "wal_keep_segments = 8" >> ./volumes/master/data/postgresql.conf
+	$(DO) echo "wal_level = replica" >> ./volumes/master/data/postgresql.conf
+	$(DO) echo "synchronous_commit = on" >> ./volumes/master/data/postgresql.conf
+	$(DO) echo "max_wal_senders = 3" >> ./volumes/master/data/postgresql.conf
+	$(DO) echo "archive_mode = off" >> ./volumes/master/data/postgresql.conf
+	$(DO) echo "wal_keep_segments = 8" >> ./volumes/master/data/postgresql.conf
 	docker-compose restart master
 
 basebackup_master:
@@ -117,19 +122,19 @@ basebackup_master:
 	docker-compose exec -T master pg_basebackup -h 127.0.0.1 -p 5432 -U ${POSTGRES_REPL_USER} -D /var/lib/postgresql/shared/data --xlog --checkpoint=fast --progress -w
 
 start_slave1_async_replication:
-	mkdir -p ./volumes/slave1
-	cp -r ./volumes/shared/data ./volumes/slave1/data
-	echo "hot_standby = on" >> ./volumes/slave1/data/postgresql.conf
-	echo "standby_mode = 'on'" >> ./volumes/slave1/data/recovery.conf
-	echo "primary_conninfo = 'host=172.16.0.2 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD}'" >> ./volumes/slave1/data/recovery.conf
+	$(DO) mkdir -p ./volumes/slave1
+	$(DO) cp -r ./volumes/shared/data ./volumes/slave1/data
+	$(DO) echo "hot_standby = on" >> ./volumes/slave1/data/postgresql.conf
+	$(DO) echo "standby_mode = 'on'" >> ./volumes/slave1/data/recovery.conf
+	$(DO) echo "primary_conninfo = 'host=172.16.0.2 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD}'" >> ./volumes/slave1/data/recovery.conf
 	docker-compose up -d slave1
 
 start_slave2_async_replication:
-	mkdir -p ./volumes/slave2
-	cp -r ./volumes/shared/data ./volumes/slave2/data
-	echo "hot_standby = on" >> ./volumes/slave2/data/postgresql.conf
-	echo "standby_mode = 'on'" >> ./volumes/slave2/data/recovery.conf
-	echo "primary_conninfo = 'host=172.16.0.2 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD}'" >> ./volumes/slave2/data/recovery.conf
+	$(DO) mkdir -p ./volumes/slave2
+	$(DO) cp -r ./volumes/shared/data ./volumes/slave2/data
+	$(DO) echo "hot_standby = on" >> ./volumes/slave2/data/postgresql.conf
+	$(DO) echo "standby_mode = 'on'" >> ./volumes/slave2/data/recovery.conf
+	$(DO) echo "primary_conninfo = 'host=172.16.0.2 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD}'" >> ./volumes/slave2/data/recovery.conf
 	docker-compose up -d slave2
 
 crash_master:
@@ -139,20 +144,20 @@ promote_slave1_to_master:
 	docker-compose exec -T slave1 su postgres -c '/usr/lib/postgresql/9.6/bin/pg_ctl promote -D /var/lib/postgresql/data'
 
 start_master_for_slave1_async_replication: stop_master
-	echo "hot_standby = on" >> ./volumes/master/data/postgresql.conf
-	echo "standby_mode = 'on'" >> ./volumes/master/data/recovery.conf
-	echo "primary_conninfo = 'host=172.16.0.3 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD}'" >> ./volumes/master/data/recovery.conf
-	echo "recovery_target_timeline='latest'" >> ./volumes/master/data/recovery.conf
-	echo "restore_command = 'cp /var/lib/postgresql/slave1/data/pg_xlog/%f \"%p\" 2> /dev/null'" >> ./volumes/master/data/recovery.conf
+	$(DO) echo "hot_standby = on" >> ./volumes/master/data/postgresql.conf
+	$(DO) echo "standby_mode = 'on'" >> ./volumes/master/data/recovery.conf
+	$(DO) echo "primary_conninfo = 'host=172.16.0.3 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD}'" >> ./volumes/master/data/recovery.conf
+	$(DO) echo "recovery_target_timeline='latest'" >> ./volumes/master/data/recovery.conf
+	$(DO) echo "restore_command = 'cp /var/lib/postgresql/slave1/data/pg_xlog/%f \"%p\" 2> /dev/null'" >> ./volumes/master/data/recovery.conf
 	docker-compose up -d master
 
 start_slave2_for_slave1_async_replication:
 	$(MAKE) stop_slave2
-	rm ./volumes/slave2/data/recovery.conf
-	echo "standby_mode = 'on'" >> ./volumes/slave2/data/recovery.conf
-	echo "primary_conninfo = 'host=172.16.0.3 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD}'" >> ./volumes/slave2/data/recovery.conf
-	echo "recovery_target_timeline='latest'" >> ./volumes/slave2/data/recovery.conf
-	echo "restore_command = 'cp /var/lib/postgresql/slave1/data/pg_xlog/%f \"%p\" 2> /dev/null'" >> ./volumes/slave2/data/recovery.conf
+	$(DO) rm ./volumes/slave2/data/recovery.conf
+	$(DO) echo "standby_mode = 'on'" >> ./volumes/slave2/data/recovery.conf
+	$(DO) echo "primary_conninfo = 'host=172.16.0.3 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD}'" >> ./volumes/slave2/data/recovery.conf
+	$(DO) echo "recovery_target_timeline='latest'" >> ./volumes/slave2/data/recovery.conf
+	$(DO) echo "restore_command = 'cp /var/lib/postgresql/slave1/data/pg_xlog/%f \"%p\" 2> /dev/null'" >> ./volumes/slave2/data/recovery.conf
 	docker-compose up -d slave2
 
 check_replication_master:
@@ -221,7 +226,7 @@ stop_slave2:
 destroy:
 	docker-compose rm -s -f
 	-docker network rm pg-practice-bridge
-	rm -rf ./volumes
+	$(DO) rm -rf ./volumes
 
 psql_master:
 	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}

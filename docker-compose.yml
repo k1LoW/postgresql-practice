@@ -45,6 +45,23 @@ services:
       - ./volumes/shared:/var/lib/postgresql/shared
       - ./volumes/master:/var/lib/postgresql/master
       - ./volumes/slave1:/var/lib/postgresql/slave1
+volumes:
+  pg_data_master:
+    driver_opts:
+      type: local
+      device: ./volumes/master/data
+  pg_data_slave1:
+    driver_opts:
+      type: local
+      device: ./volumes/slave1/data
+  pg_data_slave2:
+    driver_opts:
+      type: local
+      device: ./volumes/slave2/data
+  shared:
+    driver_opts:
+      type: local
+      device: ./volumes/shared
 networks:
   pg-practice:
     name: pg-practice-bridge
