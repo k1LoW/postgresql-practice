@@ -10,6 +10,8 @@ export SLAVE2_PORT=56432
 
 test_async_replication:
 	$(MAKE) async_replication
+	$(MAKE) async_replication_failover
+	$(MAKE) destroy
 
 #############################################################################################
 
@@ -20,6 +22,8 @@ async_replication:
 	$(MAKE) step04__check
 	$(MAKE) step05__start_async_replication
 	$(MAKE) step06__check
+
+async_replication_failover:
 	$(MAKE) step07__crash_master
 	$(MAKE) step08__check
 	$(MAKE) step09__insert_fail_test
@@ -28,7 +32,6 @@ async_replication:
 	$(MAKE) step12__check
 	$(MAKE) step13__re_replication
 	$(MAKE) step14__check
-	$(MAKE) step15__cleanup
 
 step01__initialize:
 	$(MAKE) initialize
@@ -83,9 +86,6 @@ step14__check:
 	$(MAKE) check_replication_master
 	$(MAKE) check_replication_slave1
 	$(MAKE) check_replication_slave2
-
-step15__cleanup:
-	$(MAKE) destroy
 
 #############################################################################################
 
