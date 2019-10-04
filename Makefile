@@ -15,6 +15,7 @@ test_async_replication:
 
 test_sync_replication:
 	$(MAKE) sync_replication
+	$(MAKE) sync_replication_failover
 	$(MAKE) destroy
 
 #############################################################################################
