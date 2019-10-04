@@ -5,5 +5,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
-    - name: Asyc Replication
+    - name: Test Asyc Replication
       run: sudo make test_async_replication
