@@ -1,9 +1,15 @@
 name: Test
 on: push
 jobs:
-  test:
+  test-async-replication:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
     - name: Test Async Replication
       run: sudo make test_async_replication
+  test-sync-replication:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: Test Sync Replication
+      run: sudo make test_sync_replication
