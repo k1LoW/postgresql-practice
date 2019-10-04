@@ -48,6 +48,18 @@ sync_replication:
 	$(MAKE) step05__start_replication
 	$(MAKE) check_replication_master
 
+sync_replication_failover:
+	$(MAKE) step07__crash_master
+	$(MAKE) step08__check
+	$(MAKE) step09__insert_fail_test
+	$(MAKE) step10__promote_slave
+	$(MAKE) set_slave1_async_replication_params
+	$(MAKE) step11__insert_success_test
+	$(MAKE) step12__check
+	$(MAKE) set_slave1_sync_replication_params
+	$(MAKE) step13__re_replication
+	$(MAKE) step14__check
+
 step01__initialize:
 	$(MAKE) initialize
 
@@ -80,7 +92,7 @@ step08__check:
 	$(MAKE) check_replication_slave2
 
 step09__insert_fail_test:
-	$(MAKE) insert_records_to_slave1
+	-$(MAKE) insert_records_to_slave1
 
 step10__promote_slave:
 	$(MAKE) promote_slave1_to_master
@@ -106,31 +118,56 @@ step14__check:
 
 initialize:
 	$(MAKE) destroy
+	mkdir -p ./volumes/master ./volumes/shared ./volumes/slave1 ./volumes/slave2
 	$(MAKE) start_master
+	$(MAKE) wait_master
+	echo "include_if_exists = 'replication.conf'" >> ./volumes/master/data/postgresql.conf
+	$(MAKE) restart_master
 
 create_repl_user:
 	$(MAKE) wait_master
 	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "CREATE ROLE ${POSTGRES_REPL_USER} LOGIN REPLICATION PASSWORD '${POSTGRES_REPL_PASSWORD}';"
 	echo "host replication repl_user 127.0.0.1/32 md5" >> ./volumes/master/data/pg_hba.conf
 	echo "host replication repl_user 172.16.0.0/24 md5" >> ./volumes/master/data/pg_hba.conf
-	docker-compose restart master
+	$(MAKE) restart_master
 
 set_master_async_replication_params:
-	echo "wal_level = replica" >> ./volumes/master/data/postgresql.conf
-	echo "synchronous_commit = on" >> ./volumes/master/data/postgresql.conf
-	echo "max_wal_senders = 3" >> ./volumes/master/data/postgresql.conf
-	echo "archive_mode = off" >> ./volumes/master/data/postgresql.conf
-	echo "wal_keep_segments = 8" >> ./volumes/master/data/postgresql.conf
-	docker-compose restart master
+	echo "wal_level = replica" > ./volumes/master/data/replication.conf
+	echo "synchronous_commit = on" >> ./volumes/master/data/replication.conf
+	echo "max_wal_senders = 3" >> ./volumes/master/data/replication.conf
+	echo "archive_mode = off" >> ./volumes/master/data/replication.conf
+	echo "wal_keep_segments = 8" >> ./volumes/master/data/replication.conf
+	echo "hot_standby = on" >> ./volumes/master/data/replication.conf
+	$(MAKE) restart_master
+
+set_slave1_async_replication_params:
+	echo "wal_level = replica" > ./volumes/slave1/data/replication.conf
+	echo "synchronous_commit = on" >> ./volumes/slave1/data/replication.conf
+	echo "max_wal_senders = 3" >> ./volumes/slave1/data/replication.conf
+	echo "archive_mode = off" >> ./volumes/slave1/data/replication.conf
+	echo "wal_keep_segments = 8" >> ./volumes/slave1/data/replication.conf
+	echo "hot_standby = on" >> ./volumes/slave1/data/replication.conf
+	$(MAKE) restart_slave1
 
 set_master_sync_replication_params:
-	echo "wal_level = replica" >> ./volumes/master/data/postgresql.conf
-	echo "synchronous_commit = on" >> ./volumes/master/data/postgresql.conf
-	echo "synchronous_standby_names = 'slave1,slave2'" >> ./volumes/master/data/postgresql.conf
-	echo "max_wal_senders = 3" >> ./volumes/master/data/postgresql.conf
-	echo "archive_mode = off" >> ./volumes/master/data/postgresql.conf
-	echo "wal_keep_segments = 8" >> ./volumes/master/data/postgresql.conf
-	docker-compose restart master
+	echo "wal_level = replica" > ./volumes/master/data/replication.conf
+	echo "synchronous_commit = on" >> ./volumes/master/data/replication.conf
+	echo "synchronous_standby_names = 'slave1,slave2'" >> ./volumes/master/data/replication.conf
+	echo "max_wal_senders = 3" >> ./volumes/master/data/replication.conf
+	echo "archive_mode = off" >> ./volumes/master/data/replication.conf
+	echo "wal_keep_segments = 8" >> ./volumes/master/data/replication.conf
+	echo "hot_standby = on" >> ./volumes/master/data/replication.conf
+	$(MAKE) restart_master
+
+set_slave1_sync_replication_params:
+	echo "wal_level = replica" > ./volumes/slave1/data/replication.conf
+	echo "synchronous_commit = on" >> ./volumes/slave1/data/replication.conf
+	echo "synchronous_standby_names = 'slave2,master'" >> ./volumes/slave1/data/replication.conf
+	echo "max_wal_senders = 3" >> ./volumes/slave1/data/replication.conf
+	echo "archive_mode = off" >> ./volumes/slave1/data/replication.conf
+	echo "wal_keep_segments = 8" >> ./volumes/slave1/data/replication.conf
+	echo "hot_standby = on" >> ./volumes/slave1/data/replication.conf
+	$(MAKE) restart_slave1
 
 basebackup_master:
 	$(MAKE) wait_master
@@ -141,21 +178,21 @@ basebackup_master:
 
 start_slave1_async_replication:
 	$(MAKE) stop_slave1
+	rm -rf ./volumes/slave1
 	mkdir -p ./volumes/slave1
 	cp -r ./volumes/shared/data ./volumes/slave1/data
-	echo "hot_standby = on" >> ./volumes/slave1/data/postgresql.conf
-	echo "standby_mode = 'on'" >> ./volumes/slave1/data/recovery.conf
+	echo "standby_mode = 'on'" > ./volumes/slave1/data/recovery.conf
 	echo "primary_conninfo = 'host=172.16.0.2 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=slave1'" >> ./volumes/slave1/data/recovery.conf
-	docker-compose up -d slave1
+	$(MAKE) start_slave1
 
 start_slave2_async_replication:
 	$(MAKE) stop_slave2
+	rm -rf ./volumes/slave2
 	mkdir -p ./volumes/slave2
 	cp -r ./volumes/shared/data ./volumes/slave2/data
-	echo "hot_standby = on" >> ./volumes/slave2/data/postgresql.conf
-	echo "standby_mode = 'on'" >> ./volumes/slave2/data/recovery.conf
+	echo "standby_mode = 'on'" > ./volumes/slave2/data/recovery.conf
 	echo "primary_conninfo = 'host=172.16.0.2 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=slave2'" >> ./volumes/slave2/data/recovery.conf
-	docker-compose up -d slave2
+	$(MAKE) start_slave2
 
 crash_master:
 	$(MAKE) stop_master
@@ -164,21 +201,19 @@ promote_slave1_to_master:
 	docker-compose exec -T slave1 su postgres -c '/usr/lib/postgresql/9.6/bin/pg_ctl promote -D /var/lib/postgresql/data'
 
 start_master_for_slave1_async_replication: stop_master
-	echo "hot_standby = on" >> ./volumes/master/data/postgresql.conf
-	echo "standby_mode = 'on'" >> ./volumes/master/data/recovery.conf
+	echo "standby_mode = 'on'" > ./volumes/master/data/recovery.conf
 	echo "primary_conninfo = 'host=172.16.0.3 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=master'" >> ./volumes/master/data/recovery.conf
 	echo "recovery_target_timeline='latest'" >> ./volumes/master/data/recovery.conf
 	echo "restore_command = 'cp /var/lib/postgresql/slave1/data/pg_xlog/%f \"%p\" 2> /dev/null'" >> ./volumes/master/data/recovery.conf
-	docker-compose up -d master
+	$(MAKE) start_master
 
 start_slave2_for_slave1_async_replication:
 	$(MAKE) stop_slave2
-	rm ./volumes/slave2/data/recovery.conf
-	echo "standby_mode = 'on'" >> ./volumes/slave2/data/recovery.conf
+	echo "standby_mode = 'on'" > ./volumes/slave2/data/recovery.conf
 	echo "primary_conninfo = 'host=172.16.0.3 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=slave2'" >> ./volumes/slave2/data/recovery.conf
 	echo "recovery_target_timeline='latest'" >> ./volumes/slave2/data/recovery.conf
 	echo "restore_command = 'cp /var/lib/postgresql/slave1/data/pg_xlog/%f \"%p\" 2> /dev/null'" >> ./volumes/slave2/data/recovery.conf
-	docker-compose up -d slave2
+	$(MAKE) start_slave2
 
 check_replication_master:
 	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
@@ -201,7 +236,7 @@ insert_records_to_master:
 
 insert_records_to_slave1:
 	$(MAKE) wait_slave1
-	-docker-compose exec -T slave1 pgbench -U postgres -h 127.0.0.1 -p 5432 -i
+	docker-compose exec -T slave1 pgbench -U postgres -h 127.0.0.1 -p 5432 -i
 
 insert_records_to_slave2:
 	$(MAKE) wait_slave2
@@ -227,6 +262,15 @@ start_slave1:
 
 start_slave2:
 	docker-compose up -d slave2
+
+restart_master:
+	docker-compose restart master
+
+restart_slave1:
+	docker-compose restart slave1
+
+restart_slave2:
+	docker-compose restart slave2
 
 restart_all:
 	docker-compose restart
