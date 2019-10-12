@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   alpha:
-    image: "postgres:${POSTGRES_VERSION:-11}"
+    image: "postgres:${POSTGRES_VERSION}"
     ports:
       - "56430:5432"
     environment:

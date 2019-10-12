@@ -9,9 +9,9 @@ jobs:
     steps:
     - uses: actions/checkout@master
     - name: Test Async Replication
+      run: sudo POSTGRES_VERSION=${POSTGRES_VERSION} make test_async_replication
       env:
         POSTGRES_VERSION: ${{ matrix.postgres_version }}
-      run: sudo make test_async_replication
   test-sync-replication:
     runs-on: ubuntu-latest
     strategy:
@@ -20,6 +20,6 @@ jobs:
     steps:
     - uses: actions/checkout@master
     - name: Test Sync Replication
+      run: sudo POSTGRES_VERSION=${POSTGRES_VERSION} make test_sync_replication
       env:
         POSTGRES_VERSION: ${{ matrix.postgres_version }}
-      run: sudo make test_sync_replication
