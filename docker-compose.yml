@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   alpha:
-    image: postgres:9.6
+    image: "postgres:${POSTGRES_VERSION:-11}"
     ports:
       - "56430:5432"
     environment:
@@ -16,7 +16,7 @@ services:
       - ./volumes/bravo:/var/lib/postgresql/bravo
       - ./volumes/charlie:/var/lib/postgresql/charlie
   bravo:
-    image: postgres:9.6
+    image: "postgres:${POSTGRES_VERSION:-11}"
     ports:
       - "56431:5432"
     environment:
@@ -31,7 +31,7 @@ services:
       - ./volumes/charlie:/var/lib/postgresql/charlie
       - ./volumes/alpha:/var/lib/postgresql/alpha
   charlie:
-    image: postgres:9.6
+    image: "postgres:${POSTGRES_VERSION:-11}"
     ports:
       - "56432:5432"
     environment:

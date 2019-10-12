@@ -3,13 +3,23 @@ on: push
 jobs:
   test-async-replication:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        postgres_version: [9.6, 10, 11, 12]
     steps:
     - uses: actions/checkout@master
     - name: Test Async Replication
+      env:
+        POSTGRES_VERSION: ${{ matrix.postgres_version }}
       run: sudo make test_async_replication
   test-sync-replication:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        postgres_version: [9.6, 10, 11, 12]
     steps:
     - uses: actions/checkout@master
     - name: Test Sync Replication
+      env:
+        POSTGRES_VERSION: ${{ matrix.postgres_version }}
       run: sudo make test_sync_replication
