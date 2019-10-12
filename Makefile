@@ -195,7 +195,7 @@ start_charlie_async_replication:
 	@$(MAKE) start_charlie
 
 crash_alpha:
-	@$(MAKE) docker-compose kill alpha
+	docker-compose kill alpha
 
 promote_bravo_to_alpha:
 	docker-compose exec -T bravo su postgres -c '/usr/lib/postgresql/9.6/bin/pg_ctl promote -D /var/lib/postgresql/data'
