@@ -1,12 +1,16 @@
+DESC_COLOR=\033[1;36m
+INFO_COLOR=\033[1;33m
+NO_COLOR=\033[0m
+
 export POSTGRES_USER=postgres
 export POSTGRES_PASSWORD=p0stgreS
 
 export POSTGRES_REPL_USER=repl_user
 export POSTGRES_REPL_PASSWORD=rep1icatioN
 
-export MASTER_PORT=56430
-export SLAVE1_PORT=56431
-export SLAVE2_PORT=56432
+export ALPHA_PORT=56430
+export BRAVO_PORT=56431
+export CHARLIE_PORT=56432
 
 test_async_replication:
 	@$(MAKE) async_replication
@@ -21,250 +25,280 @@ test_sync_replication:
 #############################################################################################
 
 async_replication:
+	@echo "${DESC_COLOR}環境を初期化し、マスターとなるPostgreSQL(alpha)を起動します${NO_COLOR}"
 	@$(MAKE) initialize
-	@$(MAKE) setup_master
+	@echo "${DESC_COLOR}テストデータを投入します${NO_COLOR}"
 	@$(MAKE) generate_testdata
+	@echo "${DESC_COLOR}PostgreSQL(alpha)に非同期ストリーミングレプリケーションの設定を追加します${NO_COLOR}"
+	@$(MAKE) setup_alpha_for_replication
+	@echo "${DESC_COLOR}PostgreSQL(alpha)からpg_basebackupでデータを取得し、2台のPostgreSQL(bravo, charlie)をスタンバイとして起動します${NO_COLOR}"
 	@$(MAKE) start_replication
-	@$(MAKE) check_async_replication_master
+	@echo "${DESC_COLOR}非同期レプリケーションが正常に構築できているか確認します${NO_COLOR}"
+	@$(MAKE) check_async_replication_alpha
 
 async_replication_failover:
-	@$(MAKE) crash_master
+	@echo "${DESC_COLOR}PostgreSQL(alpha)を強制停止します${NO_COLOR}"
+	@$(MAKE) crash_alpha
+	@echo "${DESC_COLOR}スタンバイ状態のPostgreSQL(bravo)ではWriteができないことを確認します${NO_COLOR}"
 	@$(MAKE) insert_fail_test
-	@$(MAKE) promote_slave
+	@echo "${DESC_COLOR}PostgreSQL(bravo)をマスターに昇格します${NO_COLOR}"
+	@$(MAKE) promote_standby
+	@echo "${DESC_COLOR}PostgreSQL(bravo)でWriteができることを確認します${NO_COLOR}"
 	@$(MAKE) insert_success_test
+	@echo "${INFO_COLOR}この時点で、alphaからbravoへのフェイルオーバーが成功しています${NO_COLOR}"
+	@echo "${DESC_COLOR}PostgreSQL(bravo)からpg_basebackupでデータを取得し、残り2台(alpha, charlie)のPostgreSQLをスタンバイとして復旧させます${NO_COLOR}"
 	@$(MAKE) re_replication
-	@$(MAKE) check_async_replication_slave1
+	@echo "${DESC_COLOR}非同期レプリケーションが正常に構築できているか確認します${NO_COLOR}"
+	@$(MAKE) check_async_replication_bravo
 
 sync_replication:
+	@echo "${DESC_COLOR}環境を初期化し、マスターとなるPostgreSQL(alpha)を起動します${NO_COLOR}"
 	@$(MAKE) initialize
-	@$(MAKE) setup_master
+	@echo "${DESC_COLOR}テストデータを投入します${NO_COLOR}"
 	@$(MAKE) generate_testdata
+	@echo "${DESC_COLOR}PostgreSQL(alpha)にまず非同期ストリーミングレプリケーションの設定を追加します${NO_COLOR}"
+	@$(MAKE) setup_alpha_for_replication
+	@echo "${DESC_COLOR}PostgreSQL(alpha)からpg_basebackupでデータを取得し、2台のPostgreSQL(bravo, charlie)をスタンバイとして起動します${NO_COLOR}"
 	@$(MAKE) start_replication
-	@$(MAKE) check_async_replication_master
-	@$(MAKE) set_master_sync_replication_params
+	@echo "${DESC_COLOR}非同期レプリケーションが正常に構築できているか確認します${NO_COLOR}"
+	@$(MAKE) check_async_replication_alpha
+	@echo "${DESC_COLOR}PostgreSQL(alpha)のレプリケーション設定を同期ストリーミングレプリケーションに変更します${NO_COLOR}"
+	@$(MAKE) set_alpha_sync_replication_params
+	@echo "${DESC_COLOR}PostgreSQL(alpha)からpg_basebackupでデータを取得し、2台のPostgreSQL(bravo, charlie)をスタンバイとして起動します${NO_COLOR}"
 	@$(MAKE) start_replication
-	@$(MAKE) check_sync_replication_master
+	@echo "${DESC_COLOR}同期レプリケーションが正常に構築できているか確認します${NO_COLOR}"
+	@$(MAKE) check_sync_replication_alpha
 
 sync_replication_failover:
-	@$(MAKE) crash_master
+	@echo "${DESC_COLOR}PostgreSQL(alpha)を強制停止します${NO_COLOR}"
+	@$(MAKE) crash_alpha
+	@echo "${DESC_COLOR}スタンバイ状態のPostgreSQL(bravo)ではWriteができないことを確認します${NO_COLOR}"
 	@$(MAKE) insert_fail_test
-	@$(MAKE) promote_slave
-	@$(MAKE) set_slave1_async_replication_params
+	@echo "${DESC_COLOR}PostgreSQL(bravo)をマスターに昇格します${NO_COLOR}"
+	@$(MAKE) promote_standby
+	@echo "${INFO_COLOR}この時、同期レプリケーション状態でスタンバイが存在しないためWriteはできません${NO_COLOR}"
+	@echo "${DESC_COLOR}PostgreSQL(bravo)のレプリケーション設定を非同期ストリーミングレプリケーションに変更します${NO_COLOR}"
+	@$(MAKE) set_bravo_async_replication_params
+	@echo "${DESC_COLOR}PostgreSQL(bravo)でWriteができることを確認します${NO_COLOR}"
 	@$(MAKE) insert_success_test
-	@$(MAKE) set_slave1_sync_replication_params
+	@echo "${INFO_COLOR}この時点で、alphaからbravoへのフェイルオーバーが成功しています${NO_COLOR}"
+	@echo "${DESC_COLOR}PostgreSQL(bravo)のレプリケーション設定を同期ストリーミングレプリケーションに変更します${NO_COLOR}"
+	@$(MAKE) set_bravo_sync_replication_params
+	@echo "${DESC_COLOR}PostgreSQL(bravo)からpg_basebackupでデータを取得し、残り2台(alpha, charlie)のPostgreSQLをスタンバイとして復旧させます${NO_COLOR}"
 	@$(MAKE) re_replication
-	@$(MAKE) check_sync_replication_slave1
-
-setup_master:
-	@$(MAKE) create_repl_user
-	@$(MAKE) set_master_async_replication_params
-
-generate_testdata:
-	@$(MAKE) insert_records_to_master
-
-start_replication:
-	@$(MAKE) basebackup_master
-	@$(MAKE) start_slave1_async_replication
-	@$(MAKE) start_slave2_async_replication
-
-insert_fail_test:
-	-@$(MAKE) insert_records_to_slave1
-
-promote_slave:
-	@$(MAKE) promote_slave1_to_master
-
-insert_success_test:
-	@$(MAKE) insert_records_to_slave1
-
-re_replication:
-	@$(MAKE) start_master_for_slave1_async_replication
-	@$(MAKE) start_slave2_for_slave1_async_replication
+	@echo "${DESC_COLOR}同期レプリケーションが正常に構築できているか確認します${NO_COLOR}"
+	@$(MAKE) check_sync_replication_bravo
 
 #############################################################################################
 
 initialize:
 	@$(MAKE) destroy
-	mkdir -p ./volumes/master ./volumes/shared ./volumes/slave1 ./volumes/slave2
-	@$(MAKE) start_master
-	@$(MAKE) wait_master
-	echo "include_if_exists = 'replication.conf'" >> ./volumes/master/data/postgresql.conf
-	@$(MAKE) restart_master
+	mkdir -p ./volumes/alpha ./volumes/shared ./volumes/bravo ./volumes/charlie
+	@$(MAKE) start_alpha
+	@$(MAKE) wait_alpha
+	echo "include_if_exists = 'replication.conf'" >> ./volumes/alpha/data/postgresql.conf
+	@$(MAKE) restart_alpha
+
+setup_alpha_for_replication:
+	@$(MAKE) create_repl_user
+	@$(MAKE) set_alpha_async_replication_params
+
+generate_testdata:
+	@$(MAKE) insert_records_to_alpha
+
+start_replication:
+	@$(MAKE) basebackup_alpha
+	@$(MAKE) start_bravo_async_replication
+	@$(MAKE) start_charlie_async_replication
+
+insert_fail_test:
+	-@$(MAKE) insert_records_to_bravo
+
+promote_standby:
+	@$(MAKE) promote_bravo_to_alpha
+
+insert_success_test:
+	@$(MAKE) insert_records_to_bravo
+
+re_replication:
+	@$(MAKE) start_alpha_for_bravo_async_replication
+	@$(MAKE) start_charlie_for_bravo_async_replication
 
 create_repl_user:
-	@$(MAKE) wait_master
-	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "CREATE ROLE ${POSTGRES_REPL_USER} LOGIN REPLICATION PASSWORD '${POSTGRES_REPL_PASSWORD}';"
-	echo "host replication repl_user 127.0.0.1/32 md5" >> ./volumes/master/data/pg_hba.conf
-	echo "host replication repl_user 172.16.0.0/24 md5" >> ./volumes/master/data/pg_hba.conf
-	@$(MAKE) restart_master
+	@$(MAKE) wait_alpha
+	docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "CREATE ROLE ${POSTGRES_REPL_USER} LOGIN REPLICATION PASSWORD '${POSTGRES_REPL_PASSWORD}';"
+	echo "host replication repl_user 127.0.0.1/32 md5" >> ./volumes/alpha/data/pg_hba.conf
+	echo "host replication repl_user 172.16.0.0/24 md5" >> ./volumes/alpha/data/pg_hba.conf
+	@$(MAKE) restart_alpha
 
-set_master_async_replication_params:
-	echo "wal_level = replica" > ./volumes/master/data/replication.conf
-	echo "synchronous_commit = on" >> ./volumes/master/data/replication.conf
-	echo "max_wal_senders = 3" >> ./volumes/master/data/replication.conf
-	echo "archive_mode = off" >> ./volumes/master/data/replication.conf
-	echo "wal_keep_segments = 8" >> ./volumes/master/data/replication.conf
-	echo "hot_standby = on" >> ./volumes/master/data/replication.conf
-	@$(MAKE) restart_master
+set_alpha_async_replication_params:
+	echo "wal_level = replica" > ./volumes/alpha/data/replication.conf
+	echo "synchronous_commit = on" >> ./volumes/alpha/data/replication.conf
+	echo "max_wal_senders = 3" >> ./volumes/alpha/data/replication.conf
+	echo "archive_mode = off" >> ./volumes/alpha/data/replication.conf
+	echo "wal_keep_segments = 8" >> ./volumes/alpha/data/replication.conf
+	echo "hot_standby = on" >> ./volumes/alpha/data/replication.conf
+	@$(MAKE) restart_alpha
 
-set_slave1_async_replication_params:
-	echo "wal_level = replica" > ./volumes/slave1/data/replication.conf
-	echo "synchronous_commit = on" >> ./volumes/slave1/data/replication.conf
-	echo "max_wal_senders = 3" >> ./volumes/slave1/data/replication.conf
-	echo "archive_mode = off" >> ./volumes/slave1/data/replication.conf
-	echo "wal_keep_segments = 8" >> ./volumes/slave1/data/replication.conf
-	echo "hot_standby = on" >> ./volumes/slave1/data/replication.conf
-	@$(MAKE) restart_slave1
+set_bravo_async_replication_params:
+	echo "wal_level = replica" > ./volumes/bravo/data/replication.conf
+	echo "synchronous_commit = on" >> ./volumes/bravo/data/replication.conf
+	echo "max_wal_senders = 3" >> ./volumes/bravo/data/replication.conf
+	echo "archive_mode = off" >> ./volumes/bravo/data/replication.conf
+	echo "wal_keep_segments = 8" >> ./volumes/bravo/data/replication.conf
+	echo "hot_standby = on" >> ./volumes/bravo/data/replication.conf
+	@$(MAKE) restart_bravo
 
-set_master_sync_replication_params:
-	echo "wal_level = replica" > ./volumes/master/data/replication.conf
-	echo "synchronous_commit = on" >> ./volumes/master/data/replication.conf
-	echo "synchronous_standby_names = 'slave1,slave2'" >> ./volumes/master/data/replication.conf
-	echo "max_wal_senders = 3" >> ./volumes/master/data/replication.conf
-	echo "archive_mode = off" >> ./volumes/master/data/replication.conf
-	echo "wal_keep_segments = 8" >> ./volumes/master/data/replication.conf
-	echo "hot_standby = on" >> ./volumes/master/data/replication.conf
-	@$(MAKE) restart_master
+set_alpha_sync_replication_params:
+	echo "wal_level = replica" > ./volumes/alpha/data/replication.conf
+	echo "synchronous_commit = on" >> ./volumes/alpha/data/replication.conf
+	echo "synchronous_standby_names = 'bravo,charlie'" >> ./volumes/alpha/data/replication.conf
+	echo "max_wal_senders = 3" >> ./volumes/alpha/data/replication.conf
+	echo "archive_mode = off" >> ./volumes/alpha/data/replication.conf
+	echo "wal_keep_segments = 8" >> ./volumes/alpha/data/replication.conf
+	echo "hot_standby = on" >> ./volumes/alpha/data/replication.conf
+	@$(MAKE) restart_alpha
 
-set_slave1_sync_replication_params:
-	echo "wal_level = replica" > ./volumes/slave1/data/replication.conf
-	echo "synchronous_commit = on" >> ./volumes/slave1/data/replication.conf
-	echo "synchronous_standby_names = 'slave2,master'" >> ./volumes/slave1/data/replication.conf
-	echo "max_wal_senders = 3" >> ./volumes/slave1/data/replication.conf
-	echo "archive_mode = off" >> ./volumes/slave1/data/replication.conf
-	echo "wal_keep_segments = 8" >> ./volumes/slave1/data/replication.conf
-	echo "hot_standby = on" >> ./volumes/slave1/data/replication.conf
-	@$(MAKE) restart_slave1
+set_bravo_sync_replication_params:
+	echo "wal_level = replica" > ./volumes/bravo/data/replication.conf
+	echo "synchronous_commit = on" >> ./volumes/bravo/data/replication.conf
+	echo "synchronous_standby_names = 'charlie,alpha'" >> ./volumes/bravo/data/replication.conf
+	echo "max_wal_senders = 3" >> ./volumes/bravo/data/replication.conf
+	echo "archive_mode = off" >> ./volumes/bravo/data/replication.conf
+	echo "wal_keep_segments = 8" >> ./volumes/bravo/data/replication.conf
+	echo "hot_standby = on" >> ./volumes/bravo/data/replication.conf
+	@$(MAKE) restart_bravo
 
-basebackup_master:
-	@$(MAKE) wait_master
+basebackup_alpha:
+	@$(MAKE) wait_alpha
 	rm -rf ./volumes/shared/data
-	docker-compose exec -T master bash -c 'echo "127.0.0.1:5432:replication:${POSTGRES_REPL_USER}:${POSTGRES_REPL_PASSWORD}" > ~/.pgpass'
-	docker-compose exec -T master bash -c 'chmod 600 ~/.pgpass'
-	docker-compose exec -T master pg_basebackup -h 127.0.0.1 -p 5432 -U ${POSTGRES_REPL_USER} -D /var/lib/postgresql/shared/data --xlog --checkpoint=fast --progress -w
+	docker-compose exec -T alpha bash -c 'echo "127.0.0.1:5432:replication:${POSTGRES_REPL_USER}:${POSTGRES_REPL_PASSWORD}" > ~/.pgpass'
+	docker-compose exec -T alpha bash -c 'chmod 600 ~/.pgpass'
+	docker-compose exec -T alpha pg_basebackup -h 127.0.0.1 -p 5432 -U ${POSTGRES_REPL_USER} -D /var/lib/postgresql/shared/data --xlog --checkpoint=fast --progress -w
 
-start_slave1_async_replication:
-	@$(MAKE) stop_slave1
-	rm -rf ./volumes/slave1
-	mkdir -p ./volumes/slave1
-	cp -r ./volumes/shared/data ./volumes/slave1/data
-	echo "standby_mode = 'on'" > ./volumes/slave1/data/recovery.conf
-	echo "primary_conninfo = 'host=172.16.0.2 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=slave1'" >> ./volumes/slave1/data/recovery.conf
-	@$(MAKE) start_slave1
+start_bravo_async_replication:
+	@$(MAKE) stop_bravo
+	rm -rf ./volumes/bravo
+	mkdir -p ./volumes/bravo
+	cp -r ./volumes/shared/data ./volumes/bravo/data
+	echo "standby_mode = 'on'" > ./volumes/bravo/data/recovery.conf
+	echo "primary_conninfo = 'host=172.16.0.2 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=bravo'" >> ./volumes/bravo/data/recovery.conf
+	@$(MAKE) start_bravo
 
-start_slave2_async_replication:
-	@$(MAKE) stop_slave2
-	rm -rf ./volumes/slave2
-	mkdir -p ./volumes/slave2
-	cp -r ./volumes/shared/data ./volumes/slave2/data
-	echo "standby_mode = 'on'" > ./volumes/slave2/data/recovery.conf
-	echo "primary_conninfo = 'host=172.16.0.2 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=slave2'" >> ./volumes/slave2/data/recovery.conf
-	@$(MAKE) start_slave2
+start_charlie_async_replication:
+	@$(MAKE) stop_charlie
+	rm -rf ./volumes/charlie
+	mkdir -p ./volumes/charlie
+	cp -r ./volumes/shared/data ./volumes/charlie/data
+	echo "standby_mode = 'on'" > ./volumes/charlie/data/recovery.conf
+	echo "primary_conninfo = 'host=172.16.0.2 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=charlie'" >> ./volumes/charlie/data/recovery.conf
+	@$(MAKE) start_charlie
 
-crash_master:
-	@$(MAKE) stop_master
+crash_alpha:
+	@$(MAKE) docker-compose kill alpha
 
-promote_slave1_to_master:
-	docker-compose exec -T slave1 su postgres -c '/usr/lib/postgresql/9.6/bin/pg_ctl promote -D /var/lib/postgresql/data'
+promote_bravo_to_alpha:
+	docker-compose exec -T bravo su postgres -c '/usr/lib/postgresql/9.6/bin/pg_ctl promote -D /var/lib/postgresql/data'
 
-start_master_for_slave1_async_replication: stop_master
-	echo "standby_mode = 'on'" > ./volumes/master/data/recovery.conf
-	echo "primary_conninfo = 'host=172.16.0.3 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=master'" >> ./volumes/master/data/recovery.conf
-	echo "recovery_target_timeline='latest'" >> ./volumes/master/data/recovery.conf
-	echo "restore_command = 'cp /var/lib/postgresql/slave1/data/pg_xlog/%f \"%p\" 2> /dev/null'" >> ./volumes/master/data/recovery.conf
-	@$(MAKE) start_master
+start_alpha_for_bravo_async_replication: stop_alpha
+	echo "standby_mode = 'on'" > ./volumes/alpha/data/recovery.conf
+	echo "primary_conninfo = 'host=172.16.0.3 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=alpha'" >> ./volumes/alpha/data/recovery.conf
+	echo "recovery_target_timeline='latest'" >> ./volumes/alpha/data/recovery.conf
+	echo "restore_command = 'cp /var/lib/postgresql/bravo/data/pg_xlog/%f \"%p\" 2> /dev/null'" >> ./volumes/alpha/data/recovery.conf
+	@$(MAKE) start_alpha
 
-start_slave2_for_slave1_async_replication:
-	@$(MAKE) stop_slave2
-	echo "standby_mode = 'on'" > ./volumes/slave2/data/recovery.conf
-	echo "primary_conninfo = 'host=172.16.0.3 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=slave2'" >> ./volumes/slave2/data/recovery.conf
-	echo "recovery_target_timeline='latest'" >> ./volumes/slave2/data/recovery.conf
-	echo "restore_command = 'cp /var/lib/postgresql/slave1/data/pg_xlog/%f \"%p\" 2> /dev/null'" >> ./volumes/slave2/data/recovery.conf
-	@$(MAKE) start_slave2
+start_charlie_for_bravo_async_replication:
+	@$(MAKE) stop_charlie
+	echo "standby_mode = 'on'" > ./volumes/charlie/data/recovery.conf
+	echo "primary_conninfo = 'host=172.16.0.3 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=charlie'" >> ./volumes/charlie/data/recovery.conf
+	echo "recovery_target_timeline='latest'" >> ./volumes/charlie/data/recovery.conf
+	echo "restore_command = 'cp /var/lib/postgresql/bravo/data/pg_xlog/%f \"%p\" 2> /dev/null'" >> ./volumes/charlie/data/recovery.conf
+	@$(MAKE) start_charlie
 
-check_async_replication_master:
-	while ! docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep '2 rows' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
-	while ! docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep 'async' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
-	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
-	docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
-	docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+check_async_replication_alpha:
+	while ! docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep '2 rows' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
+	while ! docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep 'async' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
+	docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
+	docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec -T charlie psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
 
-check_async_replication_slave1:
-	while ! docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep '2 rows' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
-	while ! docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep 'async' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
-	docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
-	docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
-	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+check_async_replication_bravo:
+	while ! docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep '2 rows' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
+	while ! docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep 'async' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
+	docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
+	docker-compose exec -T charlie psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
 
-check_sync_replication_master:
-	while ! docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep '2 rows' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
-	while ! docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep 'potential' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
-	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
-	docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
-	docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+check_sync_replication_alpha:
+	while ! docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep '2 rows' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
+	while ! docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep 'potential' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
+	docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
+	docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec -T charlie psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
 
-check_sync_replication_slave1:
-	while ! docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep '2 rows' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
-	while ! docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep 'potential' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
-	docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
-	docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
-	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+check_sync_replication_bravo:
+	while ! docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep '2 rows' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
+	while ! docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" | grep 'potential' > /dev/null 2>&1; do sleep 1; echo "waiting replication"; done;
+	docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
+	docker-compose exec -T charlie psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
 
-check_replication_master:
-	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
-	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
-	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
+check_replication_alpha:
+	docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
+	docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
 
-check_replication_slave1:
-	docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
-	docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
-	docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
+check_replication_bravo:
+	docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
+	docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
 
-check_replication_slave2:
-	docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
-	docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
-	docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
+check_replication_charlie:
+	docker-compose exec -T charlie psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;"
+	docker-compose exec -T charlie psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT pg_last_xact_replay_timestamp();"
+	docker-compose exec -T charlie psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT COUNT(*) FROM pgbench_accounts;"
 
-insert_records_to_master:
-	@$(MAKE) wait_master
-	docker-compose exec -T master pgbench -U postgres -h 127.0.0.1 -p 5432 -i
+insert_records_to_alpha:
+	@$(MAKE) wait_alpha
+	docker-compose exec -T alpha pgbench -U postgres -h 127.0.0.1 -p 5432 -i
 
-insert_records_to_slave1:
-	@$(MAKE) wait_slave1
-	docker-compose exec -T slave1 pgbench -U postgres -h 127.0.0.1 -p 5432 -i
+insert_records_to_bravo:
+	@$(MAKE) wait_bravo
+	docker-compose exec -T bravo pgbench -U postgres -h 127.0.0.1 -p 5432 -i
 
-insert_records_to_slave2:
-	@$(MAKE) wait_slave2
-	docker-compose exec -T slave2 pgbench -U postgres -h 127.0.0.1 -p 5432 -i
+insert_records_to_charlie:
+	@$(MAKE) wait_charlie
+	docker-compose exec -T charlie pgbench -U postgres -h 127.0.0.1 -p 5432 -i
 
 start_all:
 	docker-compose up -d
 
-wait_master:
-	while ! docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" > /dev/null 2>&1; do sleep 1; echo "waiting"; done;
+wait_alpha:
+	while ! docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" > /dev/null 2>&1; do sleep 1; echo "waiting"; done;
 
-wait_slave1:
-	while ! docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" > /dev/null 2>&1; do sleep 1; echo 'waiting'; done;
+wait_bravo:
+	while ! docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" > /dev/null 2>&1; do sleep 1; echo 'waiting'; done;
 
-wait_slave2:
-	while ! docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" > /dev/null 2>&1; do sleep 1; echo 'waiting'; done;
+wait_charlie:
+	while ! docker-compose exec -T charlie psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -c "SELECT * FROM pg_stat_replication;" > /dev/null 2>&1; do sleep 1; echo 'waiting'; done;
 
-start_master:
-	docker-compose up -d master
+start_alpha:
+	docker-compose up -d alpha
 
-start_slave1:
-	docker-compose up -d slave1
+start_bravo:
+	docker-compose up -d bravo
 
-start_slave2:
-	docker-compose up -d slave2
+start_charlie:
+	docker-compose up -d charlie
 
-restart_master:
-	docker-compose restart master
+restart_alpha:
+	docker-compose restart alpha
 
-restart_slave1:
-	docker-compose restart slave1
+restart_bravo:
+	docker-compose restart bravo
 
-restart_slave2:
-	docker-compose restart slave2
+restart_charlie:
+	docker-compose restart charlie
 
 restart_all:
 	docker-compose restart
@@ -272,34 +306,34 @@ restart_all:
 stop_all:
 	docker-compose stop
 
-stop_master:
-	docker-compose stop master
+stop_alpha:
+	docker-compose stop alpha
 
-stop_slave1:
-	docker-compose stop slave1
+stop_bravo:
+	docker-compose stop bravo
 
-stop_slave2:
-	docker-compose stop slave2
+stop_charlie:
+	docker-compose stop charlie
 
-reload_master:
-	docker-compose exec -T master kill -s HUP 1
+reload_alpha:
+	docker-compose exec -T alpha kill -s HUP 1
 
-reload_slave1:
-	docker-compose exec -T slave1 kill -s HUP 1
+reload_bravo:
+	docker-compose exec -T bravo kill -s HUP 1
 
-reload_slave2:
-	docker-compose exec -T slave2 kill -s HUP 1
+reload_charlie:
+	docker-compose exec -T charlie kill -s HUP 1
 
 destroy:
 	docker-compose rm -s -f
 	-docker network rm pg-practice-bridge
 	rm -rf ./volumes
 
-psql_master:
-	docker-compose exec -T master psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}
+psql_alpha:
+	docker-compose exec -T alpha psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}
 
-psql_slave1:
-	docker-compose exec -T slave1 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}
+psql_bravo:
+	docker-compose exec -T bravo psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}
 
-psql_slave2:
-	docker-compose exec -T slave2 psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}
+psql_charlie:
+	docker-compose exec -T charlie psql -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER}

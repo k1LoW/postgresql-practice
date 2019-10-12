@@ -1,6 +1,6 @@
 version: "3.7"
 services:
-  master:
+  alpha:
     image: postgres:9.6
     ports:
       - "56430:5432"
@@ -11,11 +11,11 @@ services:
       pg-practice:
         ipv4_address: 172.16.0.2
     volumes:
-      - ./volumes/master/data:/var/lib/postgresql/data
+      - ./volumes/alpha/data:/var/lib/postgresql/data
       - ./volumes/shared:/var/lib/postgresql/shared
-      - ./volumes/slave1:/var/lib/postgresql/slave1
-      - ./volumes/slave2:/var/lib/postgresql/slave2
-  slave1:
+      - ./volumes/bravo:/var/lib/postgresql/bravo
+      - ./volumes/charlie:/var/lib/postgresql/charlie
+  bravo:
     image: postgres:9.6
     ports:
       - "56431:5432"
@@ -26,11 +26,11 @@ services:
       pg-practice:
         ipv4_address: 172.16.0.3
     volumes:
-      - ./volumes/slave1/data:/var/lib/postgresql/data
+      - ./volumes/bravo/data:/var/lib/postgresql/data
       - ./volumes/shared:/var/lib/postgresql/shared
-      - ./volumes/slave2:/var/lib/postgresql/slave2
-      - ./volumes/master:/var/lib/postgresql/master
-  slave2:
+      - ./volumes/charlie:/var/lib/postgresql/charlie
+      - ./volumes/alpha:/var/lib/postgresql/alpha
+  charlie:
     image: postgres:9.6
     ports:
       - "56432:5432"
@@ -41,23 +41,23 @@ services:
       pg-practice:
         ipv4_address: 172.16.0.4
     volumes:
-      - ./volumes/slave2/data:/var/lib/postgresql/data
+      - ./volumes/charlie/data:/var/lib/postgresql/data
       - ./volumes/shared:/var/lib/postgresql/shared
-      - ./volumes/master:/var/lib/postgresql/master
-      - ./volumes/slave1:/var/lib/postgresql/slave1
+      - ./volumes/alpha:/var/lib/postgresql/alpha
+      - ./volumes/bravo:/var/lib/postgresql/bravo
 volumes:
-  pg_data_master:
+  pg_data_alpha:
     driver_opts:
       type: local
-      device: ./volumes/master/data
-  pg_data_slave1:
+      device: ./volumes/alpha/data
+  pg_data_bravo:
     driver_opts:
       type: local
-      device: ./volumes/slave1/data
-  pg_data_slave2:
+      device: ./volumes/bravo/data
+  pg_data_charlie:
     driver_opts:
       type: local
-      device: ./volumes/slave2/data
+      device: ./volumes/charlie/data
   shared:
     driver_opts:
       type: local
