@@ -174,7 +174,7 @@ basebackup_alpha:
 	rm -rf ./volumes/shared/data
 	docker-compose exec -T alpha bash -c 'echo "127.0.0.1:5432:replication:${POSTGRES_REPL_USER}:${POSTGRES_REPL_PASSWORD}" > ~/.pgpass'
 	docker-compose exec -T alpha bash -c 'chmod 600 ~/.pgpass'
-	docker-compose exec -T alpha pg_basebackup -h 127.0.0.1 -p 5432 -U ${POSTGRES_REPL_USER} -D /var/lib/postgresql/shared/data --xlog --checkpoint=fast --progress -w
+	docker-compose exec -T alpha pg_basebackup -h 127.0.0.1 -p 5432 -U ${POSTGRES_REPL_USER} -D /var/lib/postgresql/shared/data -X fetch --checkpoint=fast --progress -w
 
 start_bravo_async_replication:
 	@$(MAKE) stop_bravo
