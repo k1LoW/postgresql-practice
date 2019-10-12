@@ -2,6 +2,8 @@ DESC_COLOR=\033[1;36m
 INFO_COLOR=\033[1;33m
 NO_COLOR=\033[0m
 
+export POSTGRES_VERSION ?= 11
+
 export POSTGRES_USER=postgres
 export POSTGRES_PASSWORD=p0stgreS
 
@@ -46,7 +48,7 @@ async_replication_failover:
 	@echo "${DESC_COLOR}PostgreSQL(bravo)でWriteができることを確認します${NO_COLOR}"
 	@$(MAKE) insert_success_test
 	@echo "${INFO_COLOR}この時点で、alphaからbravoへのフェイルオーバーが成功しています${NO_COLOR}"
-	@echo "${DESC_COLOR}PostgreSQL(bravo)からpg_basebackupでデータを取得し、残り2台(alpha, charlie)のPostgreSQLをスタンバイとして復旧させます${NO_COLOR}"
+	@echo "${DESC_COLOR}restore_commandを利用し、残り2台(alpha, charlie)のPostgreSQLをスタンバイとして復旧させます${NO_COLOR}"
 	@$(MAKE) re_replication
 	@echo "${DESC_COLOR}非同期レプリケーションが正常に構築できているかを確認します${NO_COLOR}"
 	@$(MAKE) check_async_replication_bravo
@@ -84,7 +86,7 @@ sync_replication_failover:
 	@echo "${INFO_COLOR}この時点で、alphaからbravoへのフェイルオーバーが成功しています${NO_COLOR}"
 	@echo "${DESC_COLOR}PostgreSQL(bravo)のレプリケーション設定を同期ストリーミングレプリケーションに変更します${NO_COLOR}"
 	@$(MAKE) set_bravo_sync_replication_params
-	@echo "${DESC_COLOR}PostgreSQL(bravo)からpg_basebackupでデータを取得し、残り2台(alpha, charlie)のPostgreSQLをスタンバイとして復旧させます${NO_COLOR}"
+	@echo "${DESC_COLOR}restore_commandを利用し、残り2台(alpha, charlie)のPostgreSQLをスタンバイとして復旧させます${NO_COLOR}"
 	@$(MAKE) re_replication
 	@echo "${DESC_COLOR}同期レプリケーションが正常に構築できているかを確認します${NO_COLOR}"
 	@$(MAKE) check_sync_replication_bravo
@@ -198,7 +200,7 @@ crash_alpha:
 	docker-compose kill alpha
 
 promote_bravo_to_alpha:
-	docker-compose exec -T bravo su postgres -c '/usr/lib/postgresql/9.6/bin/pg_ctl promote -D /var/lib/postgresql/data'
+	docker-compose exec -T bravo su postgres -c '/usr/lib/postgresql/${POSTGRES_VERSION}/bin/pg_ctl promote -D /var/lib/postgresql/data'
 
 start_alpha_for_bravo_async_replication:
 	@$(MAKE) start_alpha
