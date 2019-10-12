@@ -33,7 +33,7 @@ async_replication:
 	@$(MAKE) setup_alpha_for_replication
 	@echo "${DESC_COLOR}PostgreSQL(alpha)からpg_basebackupでデータを取得し、2台のPostgreSQL(bravo, charlie)をスタンバイとして起動します${NO_COLOR}"
 	@$(MAKE) start_replication
-	@echo "${DESC_COLOR}非同期レプリケーションが正常に構築できているか確認します${NO_COLOR}"
+	@echo "${DESC_COLOR}非同期レプリケーションが正常に構築できているかを確認します${NO_COLOR}"
 	@$(MAKE) check_async_replication_alpha
 
 async_replication_failover:
@@ -48,7 +48,7 @@ async_replication_failover:
 	@echo "${INFO_COLOR}この時点で、alphaからbravoへのフェイルオーバーが成功しています${NO_COLOR}"
 	@echo "${DESC_COLOR}PostgreSQL(bravo)からpg_basebackupでデータを取得し、残り2台(alpha, charlie)のPostgreSQLをスタンバイとして復旧させます${NO_COLOR}"
 	@$(MAKE) re_replication
-	@echo "${DESC_COLOR}非同期レプリケーションが正常に構築できているか確認します${NO_COLOR}"
+	@echo "${DESC_COLOR}非同期レプリケーションが正常に構築できているかを確認します${NO_COLOR}"
 	@$(MAKE) check_async_replication_bravo
 
 sync_replication:
@@ -60,13 +60,13 @@ sync_replication:
 	@$(MAKE) setup_alpha_for_replication
 	@echo "${DESC_COLOR}PostgreSQL(alpha)からpg_basebackupでデータを取得し、2台のPostgreSQL(bravo, charlie)をスタンバイとして起動します${NO_COLOR}"
 	@$(MAKE) start_replication
-	@echo "${DESC_COLOR}非同期レプリケーションが正常に構築できているか確認します${NO_COLOR}"
+	@echo "${DESC_COLOR}非同期レプリケーションが正常に構築できているかを確認します${NO_COLOR}"
 	@$(MAKE) check_async_replication_alpha
 	@echo "${DESC_COLOR}PostgreSQL(alpha)のレプリケーション設定を同期ストリーミングレプリケーションに変更します${NO_COLOR}"
 	@$(MAKE) set_alpha_sync_replication_params
 	@echo "${DESC_COLOR}PostgreSQL(alpha)からpg_basebackupでデータを取得し、2台のPostgreSQL(bravo, charlie)をスタンバイとして起動します${NO_COLOR}"
 	@$(MAKE) start_replication
-	@echo "${DESC_COLOR}同期レプリケーションが正常に構築できているか確認します${NO_COLOR}"
+	@echo "${DESC_COLOR}同期レプリケーションが正常に構築できているかを確認します${NO_COLOR}"
 	@$(MAKE) check_sync_replication_alpha
 
 sync_replication_failover:
@@ -86,7 +86,7 @@ sync_replication_failover:
 	@$(MAKE) set_bravo_sync_replication_params
 	@echo "${DESC_COLOR}PostgreSQL(bravo)からpg_basebackupでデータを取得し、残り2台(alpha, charlie)のPostgreSQLをスタンバイとして復旧させます${NO_COLOR}"
 	@$(MAKE) re_replication
-	@echo "${DESC_COLOR}同期レプリケーションが正常に構築できているか確認します${NO_COLOR}"
+	@echo "${DESC_COLOR}同期レプリケーションが正常に構築できているかを確認します${NO_COLOR}"
 	@$(MAKE) check_sync_replication_bravo
 
 #############################################################################################
