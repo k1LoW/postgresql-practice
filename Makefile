@@ -200,7 +200,8 @@ crash_alpha:
 promote_bravo_to_alpha:
 	docker-compose exec -T bravo su postgres -c '/usr/lib/postgresql/9.6/bin/pg_ctl promote -D /var/lib/postgresql/data'
 
-start_alpha_for_bravo_async_replication: stop_alpha
+start_alpha_for_bravo_async_replication:
+	@$(MAKE) start_alpha
 	echo "standby_mode = 'on'" > ./volumes/alpha/data/recovery.conf
 	echo "primary_conninfo = 'host=172.16.0.3 port=5432 user=${POSTGRES_REPL_USER} password=${POSTGRES_REPL_PASSWORD} application_name=alpha'" >> ./volumes/alpha/data/recovery.conf
 	echo "recovery_target_timeline='latest'" >> ./volumes/alpha/data/recovery.conf
