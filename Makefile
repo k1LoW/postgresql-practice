@@ -154,7 +154,7 @@ set_bravo_async_replication_params:
 set_alpha_sync_replication_params:
 	echo "wal_level = replica" > ./volumes/alpha/data/replication.conf
 	echo "synchronous_commit = on" >> ./volumes/alpha/data/replication.conf
-	echo "synchronous_standby_names = 'ANY 1(bravo,charlie)'" >> ./volumes/alpha/data/replication.conf
+	echo "synchronous_standby_names = 'ANY 1 (bravo,charlie)'" >> ./volumes/alpha/data/replication.conf
 	echo "max_wal_senders = 3" >> ./volumes/alpha/data/replication.conf
 	echo "archive_mode = off" >> ./volumes/alpha/data/replication.conf
 	echo "wal_keep_segments = 8" >> ./volumes/alpha/data/replication.conf
@@ -164,7 +164,7 @@ set_alpha_sync_replication_params:
 set_bravo_sync_replication_params:
 	echo "wal_level = replica" > ./volumes/bravo/data/replication.conf
 	echo "synchronous_commit = on" >> ./volumes/bravo/data/replication.conf
-	echo "synchronous_standby_names = 'ANY 1(charlie,alpha)'" >> ./volumes/bravo/data/replication.conf
+	echo "synchronous_standby_names = 'ANY 1 (charlie,alpha)'" >> ./volumes/bravo/data/replication.conf
 	echo "max_wal_senders = 3" >> ./volumes/bravo/data/replication.conf
 	echo "archive_mode = off" >> ./volumes/bravo/data/replication.conf
 	echo "wal_keep_segments = 8" >> ./volumes/bravo/data/replication.conf
