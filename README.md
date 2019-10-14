@@ -1,4 +1,4 @@
-# PostgreSQL Replication Practice
+# PostgreSQL Practice
 
 ## Async Streaming Replication
 
