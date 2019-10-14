@@ -31,3 +31,4 @@ $ make sync_replication_failover
 ## References
 
 - [ストリーミング・レプリケーション | Let's Postgres](https://lets.postgresql.jp/documents/technical/replication/)
+- [アーキテクチャから理解するPostgreSQLのレプリケーション](https://www.slideshare.net/masahikosawada98/postgresql-86891271)
