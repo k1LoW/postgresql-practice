@@ -41,7 +41,7 @@ async_replication:
 async_replication_failover:
 	@echo "${DESC_COLOR}PostgreSQL(alpha)を強制停止します${NO_COLOR}"
 	@$(MAKE) crash_alpha
-	@echo "${DESC_COLOR}スタンバイ状態のPostgreSQL(bravo)ではWriteができないことを確認します${NO_COLOR}"
+	@echo "${DESC_COLOR}スタンバイ状態のPostgreSQL(bravo)では書き込みクエリはコミットができないことを確認します${NO_COLOR}"
 	@$(MAKE) insert_fail_test
 	@echo "${DESC_COLOR}PostgreSQL(bravo)をマスターに昇格します${NO_COLOR}"
 	@$(MAKE) promote_standby
@@ -74,11 +74,11 @@ sync_replication:
 sync_replication_failover:
 	@echo "${DESC_COLOR}PostgreSQL(alpha)を強制停止します${NO_COLOR}"
 	@$(MAKE) crash_alpha
-	@echo "${DESC_COLOR}スタンバイ状態のPostgreSQL(bravo)ではWriteができないことを確認します${NO_COLOR}"
+	@echo "${DESC_COLOR}スタンバイ状態のPostgreSQL(bravo)では書き込みクエリはコミットができないことを確認します${NO_COLOR}"
 	@$(MAKE) insert_fail_test
 	@echo "${DESC_COLOR}PostgreSQL(bravo)をマスターに昇格します${NO_COLOR}"
 	@$(MAKE) promote_standby
-	@echo "${INFO_COLOR}この時、同期レプリケーション状態でスタンバイが存在しないためWriteはできません${NO_COLOR}"
+	@echo "${INFO_COLOR}この時、同期レプリケーション状態でスタンバイが指定数存在しないため書き込みクエリはコミット待機します${NO_COLOR}"
 	@echo "${DESC_COLOR}PostgreSQL(bravo)のレプリケーション設定を非同期ストリーミングレプリケーションに変更します${NO_COLOR}"
 	@$(MAKE) set_bravo_async_replication_params
 	@echo "${DESC_COLOR}PostgreSQL(bravo)でWriteができることを確認します${NO_COLOR}"
